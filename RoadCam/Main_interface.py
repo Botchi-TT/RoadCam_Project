@@ -319,7 +319,7 @@ class ImageProcessingApp(QMainWindow):
         image_menu = bar.addMenu("Ảnh")
         adjust_menu = bar.addMenu("Điều chỉnh")
         self.history_menu = bar.addMenu("Lịch sử")
-        bar.addMenu("Bộ lọc")
+        filter_menu = bar.addMenu("Bộ lọc")
         bar.addMenu("Màu")
         bar.addMenu("Hình thái")
         bar.addMenu("Biên")
@@ -389,6 +389,7 @@ class ImageProcessingApp(QMainWindow):
         clear_history_action.triggered.connect(self.clear_history_display)
         self.history_menu.addAction(clear_history_action)
 
+        #Menu adjust
         for name in ["Độ sáng", "Âm bản", "Log", "Gamma", "Kéo giãn tương phản", "Cân bằng Histogram","Lượng tử hóa"]:
             action = QAction(name, self)
             if name == "Âm bản":
@@ -402,6 +403,11 @@ class ImageProcessingApp(QMainWindow):
                         lambda checked=False, n=name: self.select_operation(n)
                     )
             adjust_menu.addAction(action)
+
+        #Menu Filter
+        for name in ["Trung bình", "Gaussian", "Trung vị", "Sắc nét Laplacian", "Unshaprp masking"]:
+            action = QAction(name, self)
+            filter_menu.addAction(action)
 
     # -----------------------------------------------------
     # GIAO DIỆN

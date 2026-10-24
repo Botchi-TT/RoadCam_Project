@@ -5,7 +5,7 @@
         3 Điều chỉnh Log
         4 Kéo giãn tương phản
         5 Cân bằng Histogram: công thức s = 255 * CDF(r)
-        6 Cân bằng Histogram Clahe    
+        6 Cân bằng Histogram Clahe   [chưa làm]
         7 Thể hiện ảnh màu xử lý kênh màu RGB
     =========================================================
     1 - 4 Đã làm khá hoàn thiện
@@ -76,8 +76,8 @@ def draw_hist(img):
     plt.show()
 
 if __name__ == "__main__":
-    img = cv2.imread("solidDarkRight.png")
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # img = cv2.imread("solidDarkRight.png")
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # img_neg = negative_img(img)
     # for i in np.arange(0.1, 3, 0.5):
     #     img_gamma = gamma_adjust(img, i)
@@ -95,11 +95,11 @@ if __name__ == "__main__":
     # plt.imshow(img_ctr)
     # plt.show()
     
-    img_balance = hist_balance(img)
-    img_bal_cv2 = hist_balance_openCV(img)
-    fig, ax = plt.subplots(1, 2,figsize=(10,6))
-    ax[0].imshow(img_balance, cmap='gray')
-    ax[1].imshow(img_bal_cv2, cmap='gray')
-    plt.show()
-    
+    # img_balance = hist_balance(img)
+    # img_bal_cv2 = hist_balance_openCV(img)
+    # fig, ax = plt.subplots(1, 2,figsize=(10,6))
+    # ax[0].imshow(img_balance, cmap='gray')
+    # ax[1].imshow(img_bal_cv2, cmap='gray')
+    # plt.show()
+    pass
     
