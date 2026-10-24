@@ -389,11 +389,18 @@ class ImageProcessingApp(QMainWindow):
         clear_history_action.triggered.connect(self.clear_history_display)
         self.history_menu.addAction(clear_history_action)
 
-        for name in ["Độ sáng", "Âm bản", "Log", "Gamma", "Kéo giãn tương phản", "Lượng tử hóa"]:
+        for name in ["Độ sáng", "Âm bản", "Log", "Gamma", "Kéo giãn tương phản", "Cân bằng Histogram","Lượng tử hóa"]:
             action = QAction(name, self)
-            action.triggered.connect(
-                    lambda checked=False, n=name: self.select_operation(n)
-                )
+            if name == "Âm bản":
+                action.triggered.connect(self.apply_negative)
+            elif name == "Log":
+                action.triggered.connect(self.apply_log)
+            elif name == "Cân bằng Histogram":
+                action.triggered.connect(self.apply_equalize)
+            else:
+                action.triggered.connect(
+                        lambda checked=False, n=name: self.select_operation(n)
+                    )
             adjust_menu.addAction(action)
 
     # -----------------------------------------------------
@@ -1163,6 +1170,7 @@ class ImageProcessingApp(QMainWindow):
         self.updating_controls = False
         self.update_value_label()
         self.preview_operation()
+        
     #Mức sáng
     def levels_changed(self, *_):
         sender = self.sender()
@@ -1188,6 +1196,7 @@ class ImageProcessingApp(QMainWindow):
     def spin_changed(self, value):
         if self.updating_controls:
             return
+        
         operation = self.operation_combo.currentText()
         self.updating_controls = True
         self.value_slider.setValue(round(value * 100) if operation in ("Độ tương phản", "Gamma") else round(value))
@@ -1237,8 +1246,18 @@ class ImageProcessingApp(QMainWindow):
         if operation == "Kéo giãn tương phản":
             a, b = value
             return contrast_stretching(img=image, a=a, b=b)
+        
+        if operation == "Log":
+            return log_adjust(img=image)
+                
+        if operation == "Âm bản":
+            return negative_img(img=image)
+        
+        if operation == "Cân bằng Histogram":
+            return hist_balance(img=image)
+        
         return image.copy()
-
+        
     def preview_operation(self):
         if self.current_image is None or self.is_video_open:
             return
@@ -1251,7 +1270,7 @@ class ImageProcessingApp(QMainWindow):
         self.display_image()
         self.status_message.setText(f"Xem trước: {operation}")
 
-    def apply_preview(self):
+    def apply_preview(self, checked=False, operation=None, value=None):
         if self.current_image is None:
             QMessageBox.information(self, "Thông báo", "Hãy mở ảnh trước.")
             return
@@ -1261,8 +1280,18 @@ class ImageProcessingApp(QMainWindow):
                 "Tạm dừng/đóng video trước khi áp dụng thao tác ảnh."
             )
             return
-        if not self.preview_active or self.preview_image is None:
-            return
+        
+        if operation is not None:
+            # Áp dụng trực tiếp (Âm bản, Log...): tự xử lý ảnh, không cần xem trước
+            result = self.process_image(self.current_image, operation, value)
+            if result is None:
+                return
+            self.preview_image = result
+        else:
+            if not self.preview_active or self.preview_image is None:
+                return
+            operation = self.operation_combo.currentText()
+            value = self.get_parameter_value()
 
         operation = self.operation_combo.currentText()
         value = self.get_parameter_value()
@@ -1272,6 +1301,8 @@ class ImageProcessingApp(QMainWindow):
             command_name = f"{operation}: {value} mức"
         elif operation == "Kéo giãn tương phản":
             command_name = f"{operation}: a={value[0]}, b={value[1]}"
+        elif operation == "Âm bản":
+            command_name = f"{operation}"
         else:
             command_name = f"{operation}: {value}"
 
@@ -1293,6 +1324,15 @@ class ImageProcessingApp(QMainWindow):
         self.history_list.scrollToBottom()
         self.update_history_buttons()
         self.status_message.setText(f"Đã áp dụng: {command_name}")
+    
+    def apply_negative(self):
+        self.apply_preview(operation="Âm bản")
+
+    def apply_log(self):
+        self.apply_preview(operation="Log")
+        
+    def apply_equalize(self):
+        self.apply_preview(operation="Cân bằng Histogram")
     
     def cancel_preview(self):
         if self.current_image is None:

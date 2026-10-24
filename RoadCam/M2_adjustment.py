@@ -15,9 +15,9 @@
 
 from Libary import *
 
-def negative_img(image):
+def negative_img(img):
     ""
-    negative_image = 255 - image
+    negative_image = 255 - img
     return negative_image
 
 def gamma_adjust(img, gamma):
