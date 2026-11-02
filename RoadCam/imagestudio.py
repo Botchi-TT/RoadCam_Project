@@ -22,6 +22,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 from M2_adjustment import *
+from M3_filters import *
 # =========================================================
 # BẢNG MÀU GIAO DIỆN TỐI (giống mockup)
 # =========================================================
@@ -186,24 +187,132 @@ def cmd_levels(image, value):
     q = np.floor(image.astype(np.float32) * levels / 256) * (255 / (levels - 1))
     return np.clip(q, 0, 255).astype(np.uint8)
 
+@keep_alpha
+def cmd_log(image):
+    return log_adjust(img=image)
 
-# Bảng lệnh: tên hiển thị + hàm xử lý + danh sách thanh trượt của lệnh.
-# params: (khóa tham số, nhãn, min, max, mặc định, hệ số slider, số chữ số thập phân)
-# Hàm xử lý nhận (ảnh, **{khóa tham số: giá trị}).
+@keep_alpha
+def cmd_balance_hist(image):
+    return hist_balance(img=image)
+
+@keep_alpha
+def cmd_mean_blur(image, ksize):
+    return median_filter(img=image, ksize = int(ksize))
+
+@keep_alpha
+def cmd_gaussian_blur(image, ksize, sigma):
+    return gaussian_filter(img=image, ksize = int(ksize), sigma=float(sigma))
+
+@keep_alpha
+def cmd_median_blur(image, ksize):
+    return median_filter(img=image,ksize = int(ksize))
+
+@keep_alpha
+def cmd_lapacian_blur(image, amount):
+    return laplacian_filter(img=image, c=amount)
+
+@keep_alpha
+def cmd_unsharp_blur(image, amount):
+    return unsharp_masking(img=image, k=amount)
+
+@keep_alpha
+def cmd_invert(image):
+    return 255 - image
+
+@keep_alpha
+def cmd_equalize_color(image):
+    if image.ndim == 2:
+        return cv2.equalizeHist(image)
+    # Cân bằng độ sáng trên kênh Y để hạn chế thay đổi sắc màu.
+    ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+    ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
+    return cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+
+@keep_alpha
+def cmd_erode(image, ksize, shape, iterations):
+    kernel = cv2.getStructuringElement(int(shape), (int(ksize), int(ksize)))
+    return cv2.erode(image, kernel, iterations=int(iterations))
+
+@keep_alpha
+def cmd_dilate(image, ksize, shape, iterations):
+    kernel = cv2.getStructuringElement(int(shape), (int(ksize), int(ksize)))
+    return cv2.dilate(image, kernel, iterations=int(iterations))
+
+@keep_alpha
+def cmd_opening(image, ksize, shape, iterations):
+    kernel = cv2.getStructuringElement(int(shape), (int(ksize), int(ksize)))
+    return cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel, iterations=int(iterations))
+
+@keep_alpha
+def cmd_closing(image, ksize, shape, iterations):
+    kernel = cv2.getStructuringElement(int(shape), (int(ksize), int(ksize)))
+    return cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel, iterations=int(iterations))
+
+# Bảng lệnh dùng chung cho bốn nhóm trong khung Thông số.
+# Tham số dạng slider: (key, label, min, max, default, scale, decimals)
+# Tham số dạng combo:  (key, label, "combo", [(text, data), ...], default)
 COMMANDS = {
     "brightness": {"name": "Độ sáng", "func": cmd_brightness,
                    "params": [("value", "Độ sáng", -100, 100, 0, 1, 0)]},
-    "contrast": {"name": "Độ tương phản", "func": cmd_contrast,"editable": True,
-                 "params": [("a", "a", 0, 255, 0, 1,2),
-                            ("b", "b", 0, 255, 255, 1, 2)]},
+    "logarit": {"name": "Biến đổi Log", "func":cmd_log,
+                    "params":[]},
     "gamma": {"name": "Gamma", "func": cmd_gamma,
               "params": [("value", "Gamma", 10, 300, 1.0, 100, 2)]},
+    "contrast": {"name": "Độ tương phản", "func": cmd_contrast,"editable": True,
+                     "params": [("a", "a", 0, 255, 0, 1,2),
+                                ("b", "b", 0, 255, 255, 1, 2)]},
+    "balance histogram":{"name": "Cân bằng Histogram", "func": cmd_balance_hist, "params":[]},
     "temperature": {"name": "Nhiệt độ màu", "func": cmd_temperature,
                     "params": [("value", "Nhiệt độ màu", -100, 100, 0, 1, 0)]},
     "saturation": {"name": "Độ bão hòa", "func": cmd_saturation,
                    "params": [("value", "Độ bão hòa", 0, 300, 1.0, 100, 2)]},
     "levels": {"name": "Lượng tử hóa", "func": cmd_levels,
                "params": [("value", "Số mức", 2, 256, 256, 1, 0)]},
+}
+KSIZE_ITEMS = [(f"{k} × {k}", k) for k in (3, 5, 7, 9, 11, 15)]
+MORPH_SHAPES = [("Hình chữ nhật", cv2.MORPH_RECT),
+                ("Hình elip", cv2.MORPH_ELLIPSE),
+                ("Hình chữ thập", cv2.MORPH_CROSS)]
+ITERATION_ITEMS = [(str(i), i) for i in (1, 2, 3, 4, 5)]
+
+FILTERS = {
+    "mean_blur": {"name": "Bộ lọc trung bình", "func": cmd_mean_blur,
+                  "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5)]},
+    "gaussian_blur": {"name": "Bộ lọc Gaussian", "func": cmd_gaussian_blur,
+                      "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5),
+                                 ("sigma", "Sigma", 0, 500, 1.0, 100, 2)]},
+    "median_blur": {"name": "Bộ lọc trung vị", "func": cmd_median_blur,
+                    "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5)]},
+    "laplacian": {"name": "Làm sắc nét Laplacian", "func": cmd_lapacian_blur,
+                  "params": [("amount", "Cường độ", 0, 100, 0.5, 100, 2)]},
+    "unsharp": {"name": "Unsharp Masking", "func": cmd_unsharp_blur,
+                "params": [("amount", "Cường độ", 0, 300, 0.5, 100, 2)]},
+}
+
+COLORS = {
+    "invert": {"name": "Âm bản (Invert)", "func": cmd_invert, "params": []},
+    "equalize": {"name": "Cân bằng Histogram", "func": cmd_equalize_color, "params": []},
+    "temperature": COMMANDS["temperature"],
+    "saturation": COMMANDS["saturation"],
+}
+
+MORPHOLOGY = {
+    "erode": {"name": "Co (Erode)", "func": cmd_erode,
+              "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 3),
+                         ("shape", "Hình dạng nhân", "combo", MORPH_SHAPES, cv2.MORPH_RECT),
+                         ("iterations", "Số lần lặp", "combo", ITERATION_ITEMS, 1)]},
+    "dilate": {"name": "Giãn (Dilate)", "func": cmd_dilate,
+               "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 3),
+                          ("shape", "Hình dạng nhân", "combo", MORPH_SHAPES, cv2.MORPH_RECT),
+                          ("iterations", "Số lần lặp", "combo", ITERATION_ITEMS, 1)]},
+    "opening": {"name": "Mở (Opening)", "func": cmd_opening,
+                "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 3),
+                           ("shape", "Hình dạng nhân", "combo", MORPH_SHAPES, cv2.MORPH_RECT),
+                           ("iterations", "Số lần lặp", "combo", ITERATION_ITEMS, 1)]},
+    "closing": {"name": "Đóng (Closing)", "func": cmd_closing,
+                "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 3),
+                           ("shape", "Hình dạng nhân", "combo", MORPH_SHAPES, cv2.MORPH_RECT),
+                           ("iterations", "Số lần lặp", "combo", ITERATION_ITEMS, 1)]},
 }
 
 # =========================================================
@@ -221,6 +330,7 @@ class ImageCanvas(QLabel):
         self.zoom_callback = None
         self.interaction_callback = None
         self.interaction_mode = "none"  # none / roi / ruler / pan
+        self.is_dragging = False # ROI
         self.drag_start = None
         self.drag_end = None
         self.ruler_points = []
@@ -295,6 +405,7 @@ class ImageCanvas(QLabel):
     def set_interaction_mode(self, mode):
         self.interaction_mode = mode
         self.drag_start = self.drag_end = None
+        self.is_dragging = False
         self.ruler_points = []
         cursors = {
             "roi": Qt.CursorShape.CrossCursor,
@@ -326,7 +437,10 @@ class ImageCanvas(QLabel):
             return
         if self.interaction_mode == "roi":
             # bấm ngoài ảnh vẫn kéo được, điểm bị kẹp vào mép ảnh
-            self.drag_start = self.drag_end = self.image_point(event.position(), clamp=True)
+            self.drag_start = self.drag_end = self.image_point(
+                event.position(), clamp=True
+            )
+            self.is_dragging = True
             self.update()
             return
         point = self.image_point(event.position())
@@ -359,21 +473,27 @@ class ImageCanvas(QLabel):
             else:
                 value = f"R={int(px[2])} G={int(px[1])} B={int(px[0])}"
             self.mouse_callback(x, y, value)
-        if self.interaction_mode == "roi" and self.drag_start is not None:
+        if self.interaction_mode == "roi" and self.is_dragging:
             self.drag_end = self.image_point(event.position(), clamp=True)
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if self.pan_last is not None:
-            self.pan_last = None
-            self.setCursor(Qt.CursorShape.OpenHandCursor if self.interaction_mode == "pan"
-                           else Qt.CursorShape.ArrowCursor)
-            return
-        if (self.interaction_mode == "roi" and event.button() == Qt.MouseButton.LeftButton
-                and self.drag_start is not None):
-            self.drag_end = self.image_point(event.position(), clamp=True)
+        if (
+            self.interaction_mode == "roi"
+            and event.button() == Qt.MouseButton.LeftButton
+            and self.is_dragging
+        ):
+            self.drag_end = self.image_point(
+                event.position(), clamp=True
+            )
+
+            self.is_dragging = False
+
             if self.interaction_callback:
-                self.interaction_callback("roi", self.drag_start, self.drag_end)
+                self.interaction_callback(
+                    "roi", self.drag_start, self.drag_end
+                )
+
             self.update()
 
     def wheelEvent(self, event):
@@ -592,6 +712,30 @@ class ParamSlider(QWidget):
         else:
             self.value_label.setText(f"{v:.{self.decimals}f}" if self.decimals else f"{int(v)}")
 
+class ParamCombo(QWidget):
+    def __init__(self, name, items, default, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        self.default = default
+        lay.setContentsMargins(0, 2, 0, 2)
+        lay.setSpacing(2)
+        lay.addWidget(QLabel(name))
+        self.combo = QComboBox()
+        for text, data in items:
+            self.combo.addItem(text, data)
+        lay.addWidget(self.combo)
+        self.reset()
+    
+    def value(self):
+        return self.combo.currentData()
+    
+    def reset(self):
+        index = self.combo.findData(self.default)
+        self.combo.blockSignals(True)
+        self.combo.setCurrentIndex(index if index >= 0 else 0)
+        self.combo.blockSignals(False)
+ 
+
 # ====================================================
 # ỨNG DỤNG CHÍNH
 # =========================================================
@@ -678,7 +822,7 @@ class ImageStudio(QMainWindow):
             QFrame#card, QFrame#resultCard {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; border-top: 2px solid {ACCENT}; }}
             QFrame#resultCard {{ border-top-color: #e9a34e; }}
             QFrame#card QWidget, QFrame#resultCard QWidget {{ background: transparent; }}
-            QFrame#card QPushButton#adjustHead {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 7px; padding: 0; }}
+            QFrame#card QPushButton#adjustHead {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 7px; padding: 0 12px; text-align: left; }}
             QFrame#card QPushButton#adjustHead:hover {{ background: {selected}; border-color: {ACCENT}; }}
             QFrame#card QPushButton#adjustHead:checked {{ background: {selected}; border-color: {ACCENT}; }}
             QFrame#card QLabel#adjustValue {{ color: {MUTED}; }}
@@ -690,7 +834,7 @@ class ImageStudio(QMainWindow):
             QPushButton#tool:checked {{ background: {selected}; color: {ACCENT}; border-color: {BORDER}; }}
             QPushButton#primary, QFrame#card QPushButton#primary {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 600; }}
             QPushButton:disabled, QToolButton:disabled {{ color: {MUTED}; }}
-            QComboBox, QSpinBox {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 6px; padding: 5px 7px; min-height: 20px; }}
+            QComboBox, QSpinBox, QDoubleSpinBox {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 6px; padding: 5px 7px; min-height: 20px; }}
             QComboBox QAbstractItemView {{ selection-background-color: {selected}; selection-color: {TEXT}; }}
             QTabWidget::pane {{ border: none; padding-top: 7px; }}
             QTabBar::tab {{ background: transparent; color: {MUTED}; padding: 7px 7px; border-bottom: 2px solid transparent; }}
@@ -710,8 +854,7 @@ class ImageStudio(QMainWindow):
             QSplitter::handle {{ background: {BG}; }}
             QStatusBar {{ border-top: 1px solid {BORDER}; }}
             QStatusBar QLabel {{ color: {MUTED}; padding: 2px 8px; }}
-            QFrame#card QPushButton#adjustHead {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 7px; padding: 0 12px; text-align: left; }}
-            QComboBox, QSpinBox, QDoubleSpinBox {{ background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 6px; padding: 5px 7px; min-height: 20px; }}
+            
         """)
         if hasattr(self, "histogram"):
             self.histogram.figure.set_facecolor(PANEL)
@@ -749,7 +892,7 @@ class ImageStudio(QMainWindow):
 
         m = bar.addMenu("Ảnh")
         self.add_action(m, "Thông tin ảnh", self.show_image_info, "Ctrl+I")
-        self.add_action(m, "Đổi kích thước...", lambda: self.show_parameter_tab(1))
+        self.add_action(m, "Đổi kích thước...", lambda: self.show_parameter_tab(self.resize_tab_index))
         self.add_action(m, "Cắt ROI ra ảnh riêng (tự lưu)", self.crop_roi, "Ctrl+Shift+X")
         self.add_action(m, "Cắt ảnh hiện tại theo vùng chọn", self.crop_into_image)
         m.addSeparator()
@@ -764,35 +907,25 @@ class ImageStudio(QMainWindow):
 
         m = bar.addMenu("Điều chỉnh")
         for key, cmd in COMMANDS.items():
-            self.add_action(m, cmd["name"], lambda _=False, k=key: self.show_adjust(k))
+            self.add_action(m, cmd["name"], lambda _=False, k=key: self.show_cmd(k))
         m.addSeparator()
-        self.add_action(m, "Đổi kích thước...", lambda: self.show_parameter_tab(1))
+        self.add_action(m, "Đổi kích thước...", lambda: self.show_parameter_tab(self.resize_tab_index))
 
         m = bar.addMenu("Bộ lọc")
-        self.add_action(m, "Làm mờ Gaussian", lambda: self.apply_op(
-            "Bộ lọc Gaussian Blur", lambda im: cv2.GaussianBlur(im, (5, 5), 0)))
-        self.add_action(m, "Lọc trung vị (Median)", lambda: self.apply_op(
-            "Bộ lọc Median", lambda im: cv2.medianBlur(im, 5)))
-        self.add_action(m, "Lọc trung bình (Box)", lambda: self.apply_op(
-            "Bộ lọc trung bình", lambda im: cv2.blur(im, (5, 5))))
-        self.add_action(m, "Làm sắc nét", lambda: self.apply_op(
-            "Làm sắc nét", lambda im: cv2.filter2D(
-                im, -1, np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32))))
+        for key, ft in FILTERS.items():
+            self.add_action(m, ft["name"], lambda _=False, k=key: self.show_cmd(k, "Bộ lọc"))
 
         m = bar.addMenu("Màu")
-        self.add_action(m, "Chuyển ảnh xám", self.convert_gray)
-        self.add_action(m, "Âm bản (Invert)", lambda: self.apply_op("Âm bản", cv2.bitwise_not))
-        self.add_action(m, "Cân bằng histogram", lambda: self.apply_op("Cân bằng histogram", self.equalize))
+        for key, operation in COLORS.items():
+            self.add_action(m, operation["name"],
+                            lambda _=False, k=key: self.show_cmd(k, "Màu"))
+        m.addSeparator()
         self.add_action(m, "Tách kênh B / G / R", self.split_channels)
 
-        k3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         m = bar.addMenu("Hình thái")
-        self.add_action(m, "Co (Erode)", lambda: self.apply_op("Co (Erode)", lambda im: cv2.erode(im, k3)))
-        self.add_action(m, "Giãn (Dilate)", lambda: self.apply_op("Giãn (Dilate)", lambda im: cv2.dilate(im, k3)))
-        self.add_action(m, "Mở (Opening)", lambda: self.apply_op(
-            "Mở (Opening)", lambda im: cv2.morphologyEx(im, cv2.MORPH_OPEN, k3)))
-        self.add_action(m, "Đóng (Closing)", lambda: self.apply_op(
-            "Đóng (Closing)", lambda im: cv2.morphologyEx(im, cv2.MORPH_CLOSE, k3)))
+        for key, operation in MORPHOLOGY.items():
+            self.add_action(m, operation["name"],
+                            lambda _=False, k=key: self.show_cmd(k, "Hình thái"))
 
         m = bar.addMenu("Biên")
         self.add_action(m, "Canny", lambda: self.apply_op(
@@ -821,21 +954,13 @@ class ImageStudio(QMainWindow):
     def gray_of(image):
         if image.ndim == 2:
             return image
-        return cv2.cvtColor(to_bgr(image), cv2.COLOR_BGR2GRAY)
+        return negative_img(img=image)
 
     def sobel(self, image):
         g = self.gray_of(image)
         gx = cv2.Sobel(g, cv2.CV_32F, 1, 0)
         gy = cv2.Sobel(g, cv2.CV_32F, 0, 1)
         return cv2.convertScaleAbs(cv2.magnitude(gx, gy))
-
-    @staticmethod
-    def equalize(image):
-        if image.ndim == 2:
-            return cv2.equalizeHist(image)
-        ycc = cv2.cvtColor(to_bgr(image), cv2.COLOR_BGR2YCrCb)
-        ycc[..., 0] = cv2.equalizeHist(ycc[..., 0])
-        return cv2.cvtColor(ycc, cv2.COLOR_YCrCb2BGR)
 
     # -----------------------------------------------------
     # THANH CÔNG CỤ TRÊN + HỘP CÔNG CỤ TRÁI
@@ -900,7 +1025,7 @@ class ImageStudio(QMainWindow):
         self.theme_combo.currentIndexChanged.connect(self.change_theme)
         tb.addWidget(self.theme_combo)
         photo_action = QAction("Ảnh thẻ / Cỡ in", self)
-        photo_action.triggered.connect(lambda: self.show_parameter_tab(1))
+        photo_action.triggered.connect(lambda: self.show_parameter_tab(self.resize_tab_index))
         tb.insertAction(self.compare_action, photo_action)
 
         # Hộp công cụ dọc bên trái
@@ -1089,70 +1214,23 @@ class ImageStudio(QMainWindow):
         self.param_tabs.setDocumentMode(True)
         
 
-        self.active_command = None      # None = đang ở trang danh sách
-        self.command_sliders = {}       # {khóa lệnh: {khóa tham số: ParamSlider}}
-        self.command_pages = {}         # {khóa lệnh: chỉ số trang trong adjust_stack}
-        self.adjust_stack = QStackedWidget()
+        self.active_group = None
+        self.active_command = None
+        self.operation_sliders = {}   # {(nhóm, key): {parameter: widget}}
+        self.operation_pages = {}    # {(nhóm, key): page index}
+        self.operation_stacks = {}
 
-        # Trang 0: danh sách lệnh
-        list_page = QWidget()
-        ll = QVBoxLayout(list_page)
-        ll.setContentsMargins(0, 6, 0, 0)
-        ll.setSpacing(6)
-        hint = QLabel("Chọn một thông số để hiện thanh trượt điều chỉnh.")
-        hint.setObjectName("muted")
-        hint.setWordWrap(True)
-        ll.addWidget(hint)
-        for key, cmd in COMMANDS.items():
-            b = QPushButton(cmd["name"])
-            b.setObjectName("adjustHead")
-            b.setFixedHeight(36)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.clicked.connect(lambda _=False, k=key: self.open_command(k))
-            ll.addWidget(b)
-        gray_btn = QPushButton("Chuyển ảnh xám")
-        gray_btn.clicked.connect(self.convert_gray)
-        ll.addWidget(gray_btn)
-        ll.addStretch()
-        self.adjust_stack.addWidget(list_page)
-
-        # Mỗi lệnh một trang: nút quay lại + thanh trượt của riêng lệnh đó
-        for key, cmd in COMMANDS.items():
-            page = QWidget()
-            pl = QVBoxLayout(page)
-            pl.setContentsMargins(0, 6, 0, 0)
-            pl.setSpacing(8)
-            top = QHBoxLayout()
-            back = QPushButton("← Danh sách")
-            back.clicked.connect(self.close_command)
-            title = QLabel(cmd["name"])
-            title.setObjectName("cardTitle")
-            top.addWidget(back)
-            top.addStretch()
-            top.addWidget(title)
-            pl.addLayout(top)
-            group = {}
-            for pkey, label, mn, mx, df, sc, dec in cmd["params"]:
-                s = ParamSlider(label, mn, mx, df, sc, dec, editable=cmd.get("editable", False))
-                s.slider.valueChanged.connect(self.schedule_preview)
-                group[pkey] = s
-                pl.addWidget(s)
-            reset_btn = QPushButton("Đặt lại")
-            reset_btn.clicked.connect(
-                lambda _=False, g=group: ([x.reset() for x in g.values()], self.schedule_preview()))
-            pl.addWidget(reset_btn)
-            pl.addStretch()
-            self.command_sliders[key] = group
-            self.command_pages[key] = self.adjust_stack.addWidget(page)
-
-        adjust = self.adjust_stack
-        self.param_tabs.addTab(adjust, "Điều chỉnh")
+        # Mỗi nhóm có một trang danh sách và các trang tham số riêng.
+        self._add_operation_tab("Điều chỉnh", COMMANDS)
+        self._add_operation_tab("Bộ lọc", FILTERS)
+        self._add_operation_tab("Màu", COLORS)
+        self._add_operation_tab("Hình thái", MORPHOLOGY)
 
         detail = QWidget()
         dl = QGridLayout(detail)
         dl.setContentsMargins(0, 8, 0, 0)
         self.photo_preset = QComboBox()
-        for label, ratio in ASPECT_RATIOS:
+        for label, _ in ASPECT_RATIOS:
             self.photo_preset.addItem(label)
         self.photo_fit = QComboBox()
         self.photo_fit.addItem("Cắt giữa vừa khung", "crop")
@@ -1204,9 +1282,9 @@ class ImageStudio(QMainWindow):
         resize_button.clicked.connect(self.resize_image)
         dl.addWidget(resize_button, 10, 0, 1, 2)
         self.photo_preset.currentIndexChanged.connect(self.update_photo_preset)
-        self.param_tabs.addTab(detail, "Kích thước")
+        self.resize_tab_index = self.param_tabs.addTab(detail, "Kích thước")
         self._linking = False
-
+        
         param_card.body.addWidget(self.param_tabs, 1)
         btn_row = QHBoxLayout()
         self.apply_button = QPushButton("Áp dụng")
@@ -1297,25 +1375,101 @@ class ImageStudio(QMainWindow):
         self.main_splitter.setSizes([780, 295, 275])
         root.addWidget(self.main_splitter)
 
+    def _add_operation_tab(self, group_name, commands):
+        """Tạo tab danh sách thao tác và trang tham số cho từng thao tác."""
+        stack = QStackedWidget()
+        self.operation_stacks[group_name] = stack
+
+        list_page = QWidget()
+        layout = QVBoxLayout(list_page)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(6)
+        hint = QLabel("Chọn thao tác để xem và thay đổi thông số.")
+        hint.setObjectName("muted")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        for key, config in commands.items():
+            button = QPushButton(config["name"])
+            button.setObjectName("adjustHead")
+            button.setFixedHeight(36)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _=False, g=group_name, k=key: self.open_command(g, k))
+            layout.addWidget(button)
+        if group_name == "Điều chỉnh":
+            gray_btn = QPushButton("Chuyển ảnh xám")
+            gray_btn.clicked.connect(self.convert_gray)
+            layout.addWidget(gray_btn)
+        layout.addStretch()
+        stack.addWidget(list_page)
+
+        for key, config in commands.items():
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(0, 6, 0, 0)
+            page_layout.setSpacing(8)
+            top = QHBoxLayout()
+            back = QPushButton("← Danh sách")
+            back.clicked.connect(self.close_command)
+            title = QLabel(config["name"])
+            title.setObjectName("cardTitle")
+            top.addWidget(back)
+            top.addStretch()
+            top.addWidget(title)
+            page_layout.addLayout(top)
+
+            widgets = {}
+            for spec in config.get("params", []):
+                if len(spec) == 5 and spec[2] == "combo":
+                    pkey, label, _, items, default = spec
+                    widget = ParamCombo(label, items, default)
+                    widget.combo.currentIndexChanged.connect(self.schedule_preview)
+                else:
+                    pkey, label, minimum, maximum, default, scale, decimals = spec
+                    widget = ParamSlider(label, minimum, maximum, default, scale, decimals,
+                                         editable=config.get("editable", False))
+                    widget.slider.valueChanged.connect(self.schedule_preview)
+                widgets[pkey] = widget
+                page_layout.addWidget(widget)
+
+            if widgets:
+                reset_btn = QPushButton("Đặt lại")
+                reset_btn.clicked.connect(
+                    lambda _=False, group=widgets: ([w.reset() for w in group.values()], self.schedule_preview()))
+                page_layout.addWidget(reset_btn)
+            else:
+                note = QLabel("Thao tác này không có tham số. Nhấn Áp dụng để thực hiện.")
+                note.setObjectName("muted")
+                note.setWordWrap(True)
+                page_layout.addWidget(note)
+            page_layout.addStretch()
+            ref = (group_name, key)
+            self.operation_sliders[ref] = widgets
+            self.operation_pages[ref] = stack.addWidget(page)
+
+        self.param_tabs.addTab(stack, group_name)
+
     def show_parameter_tab(self, index):
         self.param_tabs.setCurrentIndex(index)
 
-    def open_command(self, key):
+    def open_command(self, group, key):
         self.clear_preview(reset_sliders=True)
+        self.active_group = group
         self.active_command = key
-        self.adjust_stack.setCurrentIndex(self.command_pages[key])
+        self.param_tabs.setCurrentIndex(list(self.operation_stacks).index(group))
+        self.operation_stacks[group].setCurrentIndex(self.operation_pages[(group, key)])
         self.display_image()
+        self.schedule_preview()
 
     def close_command(self):
         self.cancel_preview()
+        if self.active_group in self.operation_stacks:
+            self.operation_stacks[self.active_group].setCurrentIndex(0)
         self.active_command = None
-        self.adjust_stack.setCurrentIndex(0)
+        self.active_group = None
 
-    def show_adjust(self, key):
-        """Dùng cho menu Điều chỉnh."""
-        self.param_tabs.setCurrentIndex(0)
-        self.open_command(key)
-
+    def show_cmd(self, key, group="Điều chỉnh"):
+        self.open_command(group, key)
+    
     def set_comparison_visible(self, visible):
         self.compare_card.setVisible(visible)
 
@@ -1851,15 +2005,18 @@ class ImageStudio(QMainWindow):
     # G2: XEM TRƯỚC THAM SỐ (realtime) / ÁP DỤNG / HỦY
     # -----------------------------------------------------
 
+    def current_operation_config(self):
+        if self.active_group is None or self.active_command is None:
+            return None
+        return {"Điều chỉnh": COMMANDS, "Bộ lọc": FILTERS,
+                "Màu": COLORS, "Hình thái": MORPHOLOGY}[self.active_group][self.active_command]
+
     def current_params(self):
-        """Chỉ đọc các thanh của lệnh đang chọn."""
-        if self.active_command is None:
+        """Đọc giá trị từ slider hoặc combobox của thao tác đang mở."""
+        if self.active_command is None or self.active_group is None:
             return {}
-        return {k: s.value() for k, s in self.command_sliders[self.active_command].items()}
-
-    def params_are_default(self, key, params):
-        return all(abs(params[p[0]] - p[4]) < 1e-9 for p in COMMANDS[key]["params"])
-
+        widgets = self.operation_sliders[(self.active_group, self.active_command)]
+        return {key: widget.value() for key, widget in widgets.items()}
 
     def schedule_preview(self, *_):
         if self.current_image is not None and not self.is_video_open:
@@ -1867,35 +2024,40 @@ class ImageStudio(QMainWindow):
 
     def update_preview(self):
         key = self.active_command
-        if (key is None or self.current_image is None
+        config = self.current_operation_config()
+        if (key is None or config is None or self.current_image is None
                 or not self.preview_button.isChecked()):
             self.preview_image = None
         else:
             params = self.current_params()
-            if self.params_are_default(key, params):
-                self.preview_image = None
-            else:
-                self.preview_image = COMMANDS[key]["func"](self.current_image, **params)
+            # Vẫn xem trước khi tham số đang ở giá trị mặc định (ví dụ kernel 5×5).
+            self.preview_image = config["func"](self.current_image, **params)
         self.display_image()
         self.status_message.setText("Xem trước — nhấn Áp dụng hoặc Hủy"
                                     if self.preview_image is not None else "Ready")
 
-    @staticmethod
-    def describe_command(key, params):
-        return f"{COMMANDS[key]['name']}: " + ", ".join(
-            f"{v:g}" if k == "value" else f"{k}={v:g}" for k, v in params.items())
+    def describe_command(self, params):
+        config = self.current_operation_config()
+        if not params:
+            return config["name"]
+        return f"{config['name']}: " + ", ".join(
+            f"{name}={value}" for name, value in params.items())
+
     def apply_preview(self):
-        if self.param_tabs.currentIndex() == 1:
+        if self.param_tabs.currentIndex() == self.resize_tab_index:
             self.resize_image()
             return
         self.preview_timer.stop()
         key = self.active_command
-        if key is None or self.current_image is None or self.is_video_open:
+        config = self.current_operation_config()
+        if key is None or config is None or self.current_image is None or self.is_video_open:
             return
         params = self.current_params()
-        if self.params_are_default(key, params):
+        try:
+            result = config["func"](self.current_image, **params)
+        except (cv2.error, TypeError, ValueError) as error:
+            QMessageBox.warning(self, config["name"], f"Không áp dụng được: {error}")
             return
-        result = COMMANDS[key]["func"](self.current_image, **params)
         self.clear_preview(reset_sliders=True)
         name = self.describe_command(key, params)
         self.push_state(name, result)
@@ -1905,9 +2067,9 @@ class ImageStudio(QMainWindow):
         self.preview_timer.stop()
         self.preview_image = None
         if reset_sliders:
-            for group in self.command_sliders.values():
-                for s in group.values():
-                    s.reset()
+            for group in self.operation_sliders.values():
+                for widget in group.values():
+                    widget.reset()
                     
     def cancel_preview(self):
         self.clear_preview(reset_sliders=True)
