@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
+import traceback
 
 from M2_adjustment import *
 from M3_filters import *
@@ -152,6 +153,8 @@ def cmd_brightness(image, value):
 
 @keep_alpha
 def cmd_contrast(image, a, b):
+    if b <= a:
+        b = a + 1
     return contrast_stretching(img=image, a=a, b=b)
 
 
@@ -197,7 +200,7 @@ def cmd_balance_hist(image):
 
 @keep_alpha
 def cmd_mean_blur(image, ksize):
-    return median_filter(img=image, ksize = int(ksize))
+    return mean_filter(img=image, ksize = int(ksize))
 
 @keep_alpha
 def cmd_gaussian_blur(image, ksize, sigma):
@@ -269,7 +272,7 @@ COMMANDS = {
     "levels": {"name": "Lượng tử hóa", "func": cmd_levels,
                "params": [("value", "Số mức", 2, 256, 256, 1, 0)]},
 }
-KSIZE_ITEMS = [(f"{k} × {k}", k) for k in (3, 5, 7, 9, 11, 15)]
+KSIZE_ITEMS = [(f"{k} × {k}", k) for k in (3, 5, 7, 9)]
 MORPH_SHAPES = [("Hình chữ nhật", cv2.MORPH_RECT),
                 ("Hình elip", cv2.MORPH_ELLIPSE),
                 ("Hình chữ thập", cv2.MORPH_CROSS)]
@@ -280,7 +283,7 @@ FILTERS = {
                   "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5)]},
     "gaussian_blur": {"name": "Bộ lọc Gaussian", "func": cmd_gaussian_blur,
                       "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5),
-                                 ("sigma", "Sigma", 0, 500, 1.0, 100, 2)]},
+                                 ("sigma", "Sigma", 50, 500, 1.0, 100, 2)]},
     "median_blur": {"name": "Bộ lọc trung vị", "func": cmd_median_blur,
                     "params": [("ksize", "Kích thước nhân", "combo", KSIZE_ITEMS, 5)]},
     "laplacian": {"name": "Làm sắc nét Laplacian", "func": cmd_lapacian_blur,
@@ -954,7 +957,9 @@ class ImageStudio(QMainWindow):
     def gray_of(image):
         if image.ndim == 2:
             return image
-        return negative_img(img=image)
+        if image.shape[2] == 4:
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+        return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     def sobel(self, image):
         g = self.gray_of(image)
@@ -1441,6 +1446,9 @@ class ImageStudio(QMainWindow):
                 note.setObjectName("muted")
                 note.setWordWrap(True)
                 page_layout.addWidget(note)
+                if group_name == "Điều chỉnh" and key == "balance histogram":
+                    cmp_btn = QPushButton("So sánh với OpenCV")
+                    page_layout.addWidget(cmp_btn)
             page_layout.addStretch()
             ref = (group_name, key)
             self.operation_sliders[ref] = widgets
@@ -2030,8 +2038,13 @@ class ImageStudio(QMainWindow):
             self.preview_image = None
         else:
             params = self.current_params()
-            # Vẫn xem trước khi tham số đang ở giá trị mặc định (ví dụ kernel 5×5).
-            self.preview_image = config["func"](self.current_image, **params)
+            try:
+                self.preview_image = config["func"](self.current_image, **params)
+            except (cv2.error, TypeError, ValueError, ZeroDivisionError) as error:
+                self.preview_image = None
+                self.status_message.setText(f"Tham số không hợp lệ: {error}")
+                self.display_image()
+                return
         self.display_image()
         self.status_message.setText("Xem trước — nhấn Áp dụng hoặc Hủy"
                                     if self.preview_image is not None else "Ready")
@@ -2059,7 +2072,7 @@ class ImageStudio(QMainWindow):
             QMessageBox.warning(self, config["name"], f"Không áp dụng được: {error}")
             return
         self.clear_preview(reset_sliders=True)
-        name = self.describe_command(key, params)
+        name = self.describe_command(params)
         self.push_state(name, result)
         self.status_message.setText("Đã áp dụng: " + name)
 
@@ -2223,9 +2236,13 @@ class ImageStudio(QMainWindow):
         if self.video_capture is not None:
             self.video_capture.release()
         event.accept()
-
+        
+def excepthook(exc_type, exc, tb):
+    traceback.print_exception(exc_type, exc, tb)
+    QMessageBox.critical(None, "Lỗi chương trình", f"{exc_type.__name__}: {exc}")
 
 if __name__ == "__main__":
+    sys.excepthook = excepthook
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     window = ImageStudio()

@@ -18,7 +18,7 @@ def app_salt_pepper_noise(img, p, salt_vs_pepper = 0.5):
     noisy_img = img.copy()
     p = p / 100.0
     
-    h, w =img[:2]
+    h, w =img.shape[:2]
     
     num_noise = int(p * h *w)
     
