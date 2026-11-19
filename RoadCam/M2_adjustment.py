@@ -51,6 +51,7 @@ def contrast_stretching(img, a, b):
     # Check giá trị a - b nên để ở đâu
     img_contr = img.astype(float)
     img_contr = ((img_contr - a) * 255) / (b - a)
+    
     return np.clip(img_contr, 0, 255).astype(np.uint8)
 
 #Vẫn cần cải thiện thêm
@@ -64,12 +65,19 @@ def hist_balance(img):
     """
     total_pixel = img.shape[0] * img.shape[1]
     count_pixel = [float(np.sum(img == i)/ total_pixel) for i in range(256)]
+    
     cdf = np.cumsum(count_pixel)
     lut = np.clip(np.round(255 * cdf), 0, 255).astype(np.uint8)
+    
     return lut[img]
 
 def hist_balance_openCV(img):
     return cv2.equalizeHist(img)
+
+def clahe_adjust(img, clip_limit, tile):
+    tile = int(tile)
+    clahe = cv2.createCLAHE(clipLimit=float(clip_limit), tileGridSize=(tile, tile))
+    return clahe.apply(img)
 
 def draw_hist(img):
     plt.hist(img.ravel(), 256, [0, 256])

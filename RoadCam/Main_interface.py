@@ -31,7 +31,7 @@ from M4_noise import *
 from M5_color import hsv_channels, range_mask, lane_mask
 from M6_morphology import binarize, erode, dilate, opening, closing, remove_small_regions
 from M7_edges import sobel, canny, detect_lane, hough_all
-
+from M8_video import *
 OPERATION_ERRORS = (
     cv2.error,
     TypeError,
@@ -382,6 +382,9 @@ COMMANDS = {
                         ("a", "a", 0, 255, 0, 1, 2), ("b", "b", 0, 255, 255, 1, 2), editable=True),
     "balance histogram": command("Cân bằng Histogram", hist_balance, lib=True,
                                  buttons=[("So sánh với OpenCV", "compare_equalize_opencv")]),
+    "clahe": command("CLAHE", clahe_adjust,
+                     ("clip_limit", "Clip limit", 10, 50, 2.0, 10, 1),
+                     ("tile", "Kích thước lưới ô", 4, 16, 8, 1, 0), lib=True),
     "temperature": command("Nhiệt độ màu", cmd_temperature,
                            ("value", "Nhiệt độ màu", -100, 100, 0, 1, 0)),
     "saturation": command("Độ bão hòa", cmd_saturation, ("value", "Độ bão hòa", 0, 300, 1.0, 100, 2)),
@@ -953,7 +956,7 @@ class ParamCombo(QWidget):
 # ỨNG DỤNG CHÍNH
 # =========================================================
 
-class ImageStudio(QMainWindow):
+class ImageStudio(VideoModuleM8, QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ImageStudio 2 — Chỉnh sửa ảnh & ảnh thẻ")
@@ -977,12 +980,7 @@ class ImageStudio(QMainWindow):
         self.max_history = 20
 
         # Video
-        self.video_capture = None
-        self.video_timer = QTimer(self)
-        self.video_timer.timeout.connect(self.read_video_frame)
-        self.video_fps = 25
-        self.video_frame_number = 0
-        self.is_video_open = False
+        self.init_video_state()
 
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -1131,10 +1129,7 @@ class ImageStudio(QMainWindow):
         self.add_action(menus["Điều chỉnh"], "Đổi kích thước...",
                         lambda: self.show_parameter_tab(self.resize_tab_index))
 
-        m = bar.addMenu("Video")
-        self.add_action(m, "Mở video...", self.open_video)
-        self.add_action(m, "Phát / Tạm dừng", self.toggle_video, "Space")
-        self.add_action(m, "Dừng video (để chỉnh sửa khung hình)", self.stop_video)
+        self.create_video_menu(bar)
 
         m = bar.addMenu("AI")
         a = self.add_action(m, "(Sẽ bổ sung)", lambda: None)
@@ -1368,6 +1363,7 @@ class ImageStudio(QMainWindow):
         self.workspace_stack.addWidget(welcome)
         self.workspace_stack.addWidget(self.scroll_area)
         cl.addWidget(self.workspace_stack, 1)
+        cl.addWidget(self.build_video_bar())
         bottom = QHBoxLayout()
         self.image_title = QLabel("Chưa mở ảnh")
         self.image_title.setObjectName("muted")
@@ -1868,7 +1864,7 @@ class ImageStudio(QMainWindow):
             QMessageBox.critical(self, "Lỗi mở ảnh",
                                  "Tệp không hợp lệ hoặc định dạng ảnh chưa được hỗ trợ.")
             return
-        self.stop_video()
+        self.stop_video(silent=True)
         self.load_source(path, image, f"Mở ảnh ({os.path.basename(path)})")
         self.after_image_changed()
         self.status_message.setText("Đã mở ảnh")
@@ -1927,64 +1923,7 @@ class ImageStudio(QMainWindow):
     # VIDEO
     # -----------------------------------------------------
 
-    def stop_video(self):
-        self.video_timer.stop()
-        was_open = self.is_video_open
-        self.is_video_open = False
-        if self.video_capture is not None:
-            self.video_capture.release()
-            self.video_capture = None
-        if was_open and self.current_image is not None:
-            self.original_image = self.current_image.copy()
-            self.reset_history(f"Khung hình {self.video_frame_number}", self.current_image)
-            self.status_message.setText("Đã dừng video — có thể chỉnh sửa khung hình hiện tại")
-
-    def toggle_video(self):
-        if self.video_capture is None:
-            return
-        if self.video_timer.isActive():
-            self.video_timer.stop()
-            self.status_message.setText("Tạm dừng video")
-        else:
-            self.video_timer.start(max(1, int(1000 / self.video_fps)))
-
-    def open_video(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Mở video", "", "Tệp video (*.mp4 *.avi *.mov *.mkv *.wmv *.mpeg *.mpg)")
-        if not path:
-            return
-        self.stop_video()
-        capture = cv2.VideoCapture(path)
-        ok, frame = capture.read() if capture.isOpened() else (False, None)
-        if not ok or frame is None:
-            capture.release()
-            QMessageBox.critical(self, "Lỗi mở video",
-                                 "Không mở được video hoặc codec không được hỗ trợ.")
-            return
-        self.video_capture = capture
-        self.is_video_open = True
-        fps = capture.get(cv2.CAP_PROP_FPS)
-        self.video_fps = fps if fps and fps > 0 else 25
-        self.video_frame_number = 1
-        self.load_source(path, frame, f"Mở video ({os.path.basename(path)})")
-        self.display_image()
-        self.video_timer.start(max(1, int(1000 / self.video_fps)))
-        self.status_message.setText("Đang phát video (Space: tạm dừng, Video → Dừng để chỉnh sửa)")
-
-    def read_video_frame(self):
-        if self.video_capture is None:
-            return
-        ok, frame = self.video_capture.read()
-        if not ok or frame is None:
-            self.video_timer.stop()
-            self.status_message.setText("Video đã phát hết")
-            return
-        self.video_frame_number += 1
-        self.current_image = frame
-        self.original_image = frame
-        self.display_image()
-        self.image_title.setText(f"{os.path.basename(self.image_path)} — Khung hình {self.video_frame_number}")
-
+    
     # -----------------------------------------------------
     # ZOOM
     # -----------------------------------------------------

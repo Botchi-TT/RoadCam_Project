@@ -27,27 +27,27 @@ def binarize(img, threshold_val=127, use_otsu=False):
     return binary, actual_thresh
 
 #Mặt nạ
-def make_kernel(shape,ksize):
+def make_kernel(shape, ksize):
     ksize=int(np.clip(ksize,3,15))
     ksize+=1-ksize%2
-    return cv2.getStructuringElement(shape,(ksize,ksize))
+    return cv2.getStructuringElement(shape, (ksize,ksize))
 
 #Cac hinh thai
-def erode(img,ksize,shape,iterations):
-    return cv2.erode(img,make_kernel(shape,ksize),iterations=int(np.clip(iterations,1,5)))
+def erode(img, ksize, shape, iterations):
+    return cv2.erode(img,make_kernel(shape,ksize), iterations=int(np.clip(iterations,1,5)))
 
-def dilate(img,ksize,shape,iterations):
-    return cv2.dilate(img,make_kernel(shape,ksize),int(np.clip(iterations,1,5)))
+def dilate(img, ksize, shape, iterations):
+    return cv2.dilate(img, make_kernel(shape,ksize), int(np.clip(iterations,1,5)))
 
-def opening(img,ksize,shape,iterations):
-    return cv2.morphologyEx(img,cv2.MORPH_OPEN,make_kernel(shape,ksize),int(np.clip(iterations,1,5)))
+def opening(img, ksize, shape, iterations):
+    return cv2.morphologyEx(img, cv2.MORPH_OPEN,make_kernel(shape,ksize), int(np.clip(iterations,1,5)))
 
 def closing(img,ksize,shape,iterations):
-    return cv2.morphologyEx(img,cv2.MORPH_CLOSE,make_kernel(shape,ksize),int(np.clip(iterations,1,5)))
+    return cv2.morphologyEx(img, cv2.MORPH_CLOSE,make_kernel(shape,ksize), int(np.clip(iterations,1,5)))
     
-def remove_small_regions(img,min_area):
+def remove_small_regions(img, min_area):
      binary,_=binarize(img)
-     n,labels,stats,centroids=cv2.connectedComponentsWithStats(binary,connectivity=8)
+     n,labels,stats,centroids=cv2.connectedComponentsWithStats(binary, connectivity=8)
      if n<=1:
          return binary,0,0
      keep=stats[1:,cv2.CC_STAT_AREA]>= int(min_area) #stats index 0 chứa thông tin của nền

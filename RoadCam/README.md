@@ -12,3 +12,7 @@ NODE 30/10
 
 Phần cần sửa và lưu ý
 - Histogram chưa kiểm tra ảnh xám
+
+#Đã xem video được nhưng vẫn bị lỗi không chỉnh ROI áp ROI và điều khiển M7 M5
+#phát hiện làn trên video, phát hiện chuyển động\
+#Tóm lại phần M8 chưa liên kết được với M7 và M5

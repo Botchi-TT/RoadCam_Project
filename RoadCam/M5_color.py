@@ -16,11 +16,11 @@ def hsv_channels(image):
     h,s,v=cv2.split(hsv)
     return h,s,v
 
-def range_mask(image,lower,upper):
+def range_mask(image, lower, upper):
     hsv=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     return cv2.inRange(hsv,np.array(lower,dtype=np.uint8),np.array(upper,np.uint8))
 
-def lane_mask(image_bgr, roi_mask=None,white_range=WHITE_RANGE, yellow_range=YELLOW_RANGE):
+def lane_mask(image_bgr, roi_mask=None, white_range=WHITE_RANGE, yellow_range=YELLOW_RANGE):
     """Mặt nạ vạch làn = (trắng OR vàng) AND ROI."""
     white = range_mask(image_bgr, *white_range)
     yellow = range_mask(image_bgr, *yellow_range)
